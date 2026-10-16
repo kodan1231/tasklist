@@ -8,30 +8,79 @@
 </head>
 <body>
   <main>
-    <h1>タスクリスト</h1>
+    <header>
+      <h1>タスクリスト</h1>
+      <span id="me"></span>
+      <button id="open-settings" type="button">設定</button>
+    </header>
 
     <form id="new-task">
       <input id="title" type="text" placeholder="新しいタスク" maxlength="500" required autocomplete="off">
-      <input id="due" type="date" aria-label="期限">
-      <button type="submit">追加</button>
+      <div class="row">
+        <select id="assignee" aria-label="担当者"></select>
+        <span id="new-task-tags"></span>
+        <input id="due" type="date" aria-label="期限">
+        <button type="submit">追加</button>
+      </div>
     </form>
 
-    <nav id="filters">
-      <button data-filter="active" class="selected">未完了</button>
-      <button data-filter="done">完了済み</button>
-      <button data-filter="all">すべて</button>
-    </nav>
+    <div id="filters">
+      <nav id="status-filter">
+        <button data-filter="active" class="selected">未完了</button>
+        <button data-filter="done">完了済み</button>
+        <button data-filter="all">すべて</button>
+      </nav>
+      <div class="selects">
+        <select id="assignee-filter" aria-label="担当者で絞り込み"></select>
+        <select id="tag-filter" aria-label="タグで絞り込み"></select>
+      </div>
+    </div>
 
     <ul id="tasks"></ul>
     <p id="empty" hidden>タスクはありません</p>
     <p id="error" role="alert" hidden></p>
   </main>
 
+  <dialog id="settings">
+    <form method="dialog" class="dialog-head">
+      <h2>設定</h2>
+      <button aria-label="閉じる">×</button>
+    </form>
+
+    <section>
+      <h3>メンバー</h3>
+      <ul id="member-list" class="settings-list"></ul>
+      <form id="new-member" class="add-form">
+        <input id="member-email" type="email" placeholder="メールアドレス" required>
+        <input id="member-name" type="text" placeholder="表示名" maxlength="50" required>
+        <button type="submit">追加</button>
+      </form>
+      <p class="note">追加した人がログインできるように、Cloudflare Access のポリシーにも同じメールアドレスを追加してください。</p>
+    </section>
+
+    <section>
+      <h3>タグ</h3>
+      <ul id="tag-list" class="settings-list"></ul>
+      <form id="new-tag" class="add-form">
+        <input id="tag-name" type="text" placeholder="タグ名（例: 仕事）" maxlength="30" required>
+        <select id="tag-color" aria-label="色"></select>
+        <button type="submit">追加</button>
+      </form>
+    </section>
+  </dialog>
+
   <template id="task-template">
     <li>
-      <input type="checkbox" class="toggle" aria-label="完了">
-      <span class="title" tabindex="0" title="ダブルクリックで編集"></span>
-      <input type="date" class="due" aria-label="期限">
+      <input type="checkbox" class="toggle">
+      <div class="body">
+        <span class="title" tabindex="0" title="ダブルクリックで編集"></span>
+        <div class="meta">
+          <select class="assignee" aria-label="担当者"></select>
+          <span class="progress"></span>
+          <span class="tags"></span>
+          <input type="date" class="due" aria-label="期限">
+        </div>
+      </div>
       <button class="delete" aria-label="削除">×</button>
     </li>
   </template>

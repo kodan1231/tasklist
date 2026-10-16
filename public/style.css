@@ -6,6 +6,17 @@
   --border: #d9dde3;
   --accent: #f38020;
   --danger: #d1242f;
+  --ok: #1a7f37;
+
+  --c-gray: #6b7280;
+  --c-red: #cf222e;
+  --c-orange: #c4510c;
+  --c-yellow: #9a6700;
+  --c-green: #1a7f37;
+  --c-teal: #0e7c7b;
+  --c-blue: #0969da;
+  --c-purple: #8250df;
+  --c-pink: #bf3989;
   color-scheme: light dark;
 }
 
@@ -17,6 +28,17 @@
     --muted: #9aa1ab;
     --border: #353a42;
     --danger: #ff6b6b;
+    --ok: #4ac26b;
+
+    --c-gray: #9aa1ab;
+    --c-red: #ff7b72;
+    --c-orange: #f0883e;
+    --c-yellow: #d29922;
+    --c-green: #4ac26b;
+    --c-teal: #39c5bb;
+    --c-blue: #58a6ff;
+    --c-purple: #bc8cff;
+    --c-pink: #f778ba;
   }
 }
 
@@ -30,14 +52,21 @@ body {
 }
 
 main {
-  max-width: 640px;
+  max-width: 680px;
   margin: 0 auto;
   padding: 32px 16px;
 }
 
-h1 { font-size: 1.5rem; margin: 0 0 20px; }
+header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+h1 { font-size: 1.5rem; margin: 0; flex: 1; }
+#me { color: var(--muted); font-size: 0.85rem; }
 
-input, button {
+input, button, select {
   font: inherit;
   color: inherit;
   background: var(--card);
@@ -47,13 +76,20 @@ input, button {
 }
 
 button { cursor: pointer; }
+button:disabled { cursor: default; opacity: 0.4; }
+
+.note { color: var(--muted); font-size: 0.8rem; margin: 6px 0 0; }
+
+/* ---- タスク追加 ---- */
 
 #new-task {
   display: flex;
+  flex-direction: column;
   gap: 8px;
   margin-bottom: 16px;
 }
-#new-task #title { flex: 1; min-width: 0; }
+#new-task .row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+#new-task #new-task-tags { flex: 1; }
 #new-task button[type="submit"] {
   background: var(--accent);
   border-color: var(--accent);
@@ -61,9 +97,21 @@ button { cursor: pointer; }
   font-weight: 600;
 }
 
-#filters { display: flex; gap: 4px; margin-bottom: 12px; }
-#filters button { border-color: transparent; background: none; color: var(--muted); }
-#filters button.selected { background: var(--card); border-color: var(--border); color: var(--text); }
+/* ---- 絞り込み ---- */
+
+#filters {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+#status-filter, #filters .selects { display: flex; gap: 4px; }
+#status-filter button { border-color: transparent; background: none; color: var(--muted); }
+#status-filter button.selected { background: var(--card); border-color: var(--border); color: var(--text); }
+#filters select { padding: 6px 8px; font-size: 0.85rem; }
+
+/* ---- タスク一覧 ---- */
 
 #tasks { list-style: none; margin: 0; padding: 0; }
 
@@ -79,20 +127,128 @@ button { cursor: pointer; }
 }
 
 #tasks .toggle { width: 18px; height: 18px; margin: 0; flex-shrink: 0; }
-#tasks .title { flex: 1; min-width: 0; overflow-wrap: anywhere; cursor: text; }
-#tasks .title-edit { flex: 1; min-width: 0; padding: 4px 6px; }
-#tasks .due { padding: 4px 6px; color: var(--muted); font-size: 0.85rem; }
-#tasks .delete { border: none; background: none; color: var(--muted); font-size: 1.1rem; padding: 4px 8px; }
-#tasks .delete:hover { color: var(--danger); }
+#tasks .body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+#tasks .title { overflow-wrap: anywhere; cursor: text; }
+#tasks .title-edit { padding: 4px 6px; }
+#tasks .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+#tasks .assignee, #tasks .due { padding: 2px 6px; color: var(--muted); font-size: 0.8rem; }
+#tasks li.shared .assignee { color: var(--accent); border-color: var(--accent); }
+#tasks .progress { display: flex; gap: 4px; }
 
 #tasks li.done .title { text-decoration: line-through; color: var(--muted); }
 #tasks li.overdue .due { color: var(--danger); border-color: var(--danger); }
 
+.delete { border: none; background: none; color: var(--muted); font-size: 1.1rem; padding: 4px 8px; }
+.delete:not(:disabled):hover { color: var(--danger); }
+
 #empty { color: var(--muted); text-align: center; padding: 24px 0; }
 #error { color: var(--danger); }
 
+/* ---- チップ・タグ ---- */
+
+.chip {
+  display: inline-block;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  white-space: nowrap;
+}
+.chip.ok { color: var(--ok); border-color: var(--ok); }
+.chip.tag {
+  color: var(--c);
+  border-color: color-mix(in srgb, var(--c) 45%, transparent);
+  background: color-mix(in srgb, var(--c) 12%, transparent);
+}
+.c-gray { --c: var(--c-gray); }
+.c-red { --c: var(--c-red); }
+.c-orange { --c: var(--c-orange); }
+.c-yellow { --c: var(--c-yellow); }
+.c-green { --c: var(--c-green); }
+.c-teal { --c: var(--c-teal); }
+.c-blue { --c: var(--c-blue); }
+.c-purple { --c: var(--c-purple); }
+.c-pink { --c: var(--c-pink); }
+
+.tag-picker { position: relative; display: inline-block; }
+.tag-picker summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 2px 0;
+}
+.tag-picker summary::-webkit-details-marker { display: none; }
+.tag-picker .placeholder { color: var(--muted); font-size: 0.8rem; padding: 1px 4px; }
+.tag-picker .menu {
+  position: absolute;
+  z-index: 10;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 180px;
+  max-height: 260px;
+  overflow-y: auto;
+  padding: 6px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.15);
+}
+.tag-picker .menu label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.tag-picker .menu label:hover { background: var(--bg); }
+.tag-picker .menu .note { margin: 4px 6px; white-space: nowrap; }
+
+/* ---- 設定ダイアログ ---- */
+
+dialog {
+  width: min(520px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  padding: 0 20px 20px;
+  color: var(--text);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+dialog::backdrop { background: rgb(0 0 0 / 0.4); }
+.dialog-head {
+  position: sticky;
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 0 8px;
+  background: var(--card);
+}
+.dialog-head h2 { margin: 0; font-size: 1.2rem; }
+.dialog-head button { border: none; background: none; font-size: 1.3rem; padding: 4px 8px; }
+dialog h3 { font-size: 0.95rem; margin: 16px 0 8px; }
+
+.settings-list { list-style: none; margin: 0 0 8px; padding: 0; }
+.settings-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+.settings-list input { flex: 1; min-width: 0; padding: 4px 8px; }
+.settings-list select { padding: 4px 6px; }
+.settings-list .email { color: var(--muted); font-size: 0.8rem; overflow-wrap: anywhere; flex: 1; }
+
+.add-form { display: flex; flex-wrap: wrap; gap: 6px; }
+.add-form input { flex: 1; min-width: 120px; }
+
 @media (max-width: 480px) {
-  #new-task { flex-wrap: wrap; }
-  #new-task #title { flex-basis: 100%; }
-  #new-task #due { flex: 1; }
+  header { flex-wrap: wrap; }
+  #me { order: 3; flex-basis: 100%; }
 }
