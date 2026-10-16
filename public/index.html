@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>タスクリスト</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <main>
+    <h1>タスクリスト</h1>
+
+    <form id="new-task">
+      <input id="title" type="text" placeholder="新しいタスク" maxlength="500" required autocomplete="off">
+      <input id="due" type="date" aria-label="期限">
+      <button type="submit">追加</button>
+    </form>
+
+    <nav id="filters">
+      <button data-filter="active" class="selected">未完了</button>
+      <button data-filter="done">完了済み</button>
+      <button data-filter="all">すべて</button>
+    </nav>
+
+    <ul id="tasks"></ul>
+    <p id="empty" hidden>タスクはありません</p>
+    <p id="error" role="alert" hidden></p>
+  </main>
+
+  <template id="task-template">
+    <li>
+      <input type="checkbox" class="toggle" aria-label="完了">
+      <span class="title" tabindex="0" title="ダブルクリックで編集"></span>
+      <input type="date" class="due" aria-label="期限">
+      <button class="delete" aria-label="削除">×</button>
+    </li>
+  </template>
+
+  <script src="/app.js" type="module"></script>
+</body>
+</html>

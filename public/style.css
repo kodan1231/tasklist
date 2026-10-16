@@ -1,0 +1,98 @@
+:root {
+  --bg: #f6f7f9;
+  --card: #ffffff;
+  --text: #1f2328;
+  --muted: #6b7280;
+  --border: #d9dde3;
+  --accent: #f38020;
+  --danger: #d1242f;
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #15171a;
+    --card: #1f2227;
+    --text: #e6e8eb;
+    --muted: #9aa1ab;
+    --border: #353a42;
+    --danger: #ff6b6b;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Yu Gothic UI", sans-serif;
+}
+
+main {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 32px 16px;
+}
+
+h1 { font-size: 1.5rem; margin: 0 0 20px; }
+
+input, button {
+  font: inherit;
+  color: inherit;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+
+button { cursor: pointer; }
+
+#new-task {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+#new-task #title { flex: 1; min-width: 0; }
+#new-task button[type="submit"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+#filters { display: flex; gap: 4px; margin-bottom: 12px; }
+#filters button { border-color: transparent; background: none; color: var(--muted); }
+#filters button.selected { background: var(--card); border-color: var(--border); color: var(--text); }
+
+#tasks { list-style: none; margin: 0; padding: 0; }
+
+#tasks li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  margin-bottom: 6px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+#tasks .toggle { width: 18px; height: 18px; margin: 0; flex-shrink: 0; }
+#tasks .title { flex: 1; min-width: 0; overflow-wrap: anywhere; cursor: text; }
+#tasks .title-edit { flex: 1; min-width: 0; padding: 4px 6px; }
+#tasks .due { padding: 4px 6px; color: var(--muted); font-size: 0.85rem; }
+#tasks .delete { border: none; background: none; color: var(--muted); font-size: 1.1rem; padding: 4px 8px; }
+#tasks .delete:hover { color: var(--danger); }
+
+#tasks li.done .title { text-decoration: line-through; color: var(--muted); }
+#tasks li.overdue .due { color: var(--danger); border-color: var(--danger); }
+
+#empty { color: var(--muted); text-align: center; padding: 24px 0; }
+#error { color: var(--danger); }
+
+@media (max-width: 480px) {
+  #new-task { flex-wrap: wrap; }
+  #new-task #title { flex-basis: 100%; }
+  #new-task #due { flex: 1; }
+}

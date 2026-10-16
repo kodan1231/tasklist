@@ -1,0 +1,15 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "tasklist",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS"
+  },
+  "durable_objects": {
+    "bindings": [{ "name": "TASKS", "class_name": "TaskStore" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["TaskStore"] }],
+  "observability": { "enabled": true }
+}
