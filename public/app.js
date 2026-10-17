@@ -8,23 +8,28 @@ const COLORS = [
 
 let state = { me: null, members: [], tags: [], tasks: [] };
 let statusFilter = "active";
-let assigneeFilter = "all"; // "all" | ALL | メールアドレス
+let assigneeFilter = "all"; // "all" | ALL | ユーザー名
 let tagFilter = "all"; // "all" | "none" | タグ ID
 let newTaskTags = [];
+
+class AuthRequired extends Error {}
 
 async function api(path, options = {}) {
   const res = await fetch(`/api${path}`, {
     ...options,
     headers: { "Content-Type": "application/json" },
   });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error ?? `HTTP ${res.status}`);
+  const body = res.status === 204 ? null : await res.json().catch(() => ({}));
+  if (res.status === 401 && path !== "/login") {
+    showAuth("login");
+    throw new AuthRequired(body?.error ?? "ログインしてください");
   }
-  return res.status === 204 ? null : res.json();
+  if (!res.ok) throw new Error(body?.error ?? `HTTP ${res.status}`);
+  return body;
 }
 
 function showError(e) {
+  if (e instanceof AuthRequired) return;
   const el = $("#error");
   el.textContent = `エラー: ${e.message}`;
   el.hidden = false;
@@ -49,9 +54,63 @@ async function mutate(path, method, body) {
     ok = false;
     showError(e);
   }
-  await load();
+  if (state.me) await load();
   return ok;
 }
+
+// ---- ログイン・初期設定 ----
+
+function showAuth(mode) {
+  state.me = null;
+  $("#settings").close();
+  $("#app").hidden = true;
+  $("#auth").hidden = false;
+  $("#login-form").hidden = mode !== "login";
+  $("#setup-form").hidden = mode !== "setup";
+  $("#auth-error").textContent = "";
+  (mode === "login" ? $("#login-username") : $("#setup-username")).focus();
+}
+
+async function enterApp() {
+  $("#auth").hidden = true;
+  $("#app").hidden = false;
+  await load();
+}
+
+async function submitAuth(path, body, form) {
+  try {
+    await api(path, { method: "POST", body: JSON.stringify(body) });
+    form.reset();
+    await enterApp();
+  } catch (e) {
+    $("#auth-error").textContent = e.message;
+  }
+}
+
+$("#login-form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  submitAuth("/login", { username: $("#login-username").value, pin: $("#login-pin").value }, e.target);
+});
+
+$("#setup-form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  submitAuth("/setup", {
+    username: $("#setup-username").value,
+    name: $("#setup-name").value,
+    pin: $("#setup-pin").value,
+  }, e.target);
+});
+
+$("#logout").addEventListener("click", async () => {
+  try {
+    await api("/logout", { method: "POST" });
+  } catch (e) {
+    showError(e);
+  }
+  showAuth("login");
+});
+
+// ---- 表示 ----
 
 function today() {
   const d = new Date();
@@ -59,13 +118,13 @@ function today() {
   return d.toISOString().slice(0, 10);
 }
 
-const nameOf = (email) =>
-  email === ALL ? "全員" : state.members.find((m) => m.email === email)?.name ?? email;
+const nameOf = (username) =>
+  username === ALL ? "全員" : state.members.find((m) => m.username === username)?.name ?? username;
 const tagById = (id) => state.tags.find((t) => t.id === id);
 
 // 自分を先頭に並べたメンバー
 const membersMeFirst = () =>
-  [...state.members].sort((a, b) => (b.email === state.me) - (a.email === state.me));
+  [...state.members].sort((a, b) => (b.username === state.me) - (a.username === state.me));
 
 function el(tag, props = {}, ...children) {
   const node = Object.assign(document.createElement(tag), props);
@@ -81,7 +140,7 @@ function setOptions(select, options, value) {
 
 function assigneeOptions() {
   return [
-    ...membersMeFirst().map((m) => [m.email, m.email === state.me ? `${m.name}（自分）` : m.name]),
+    ...membersMeFirst().map((m) => [m.username, m.username === state.me ? `${m.name}（自分）` : m.name]),
     [ALL, "全員"],
   ];
 }
@@ -129,8 +188,8 @@ document.addEventListener("click", (e) => {
 });
 
 // ある人から見て「自分の分が終わったか」。全員の作業は本人の分だけで判定する
-function isDoneFor(task, email) {
-  if (task.assignee === ALL && email) return task.completedBy.includes(email);
+function isDoneFor(task, username) {
+  if (task.assignee === ALL && username) return task.completedBy.includes(username);
   return task.done;
 }
 
@@ -171,7 +230,7 @@ function renderNewTaskForm() {
 function renderFilters() {
   assigneeFilter = setOptions($("#assignee-filter"), [
     ["all", "すべての担当"],
-    ...membersMeFirst().map((m) => [m.email, m.email === state.me ? "自分のやること" : `${m.name}のやること`]),
+    ...membersMeFirst().map((m) => [m.username, m.username === state.me ? "自分のやること" : `${m.name}のやること`]),
     [ALL, "全員でやる作業"],
   ], assigneeFilter);
   tagFilter = setOptions($("#tag-filter"), [
@@ -216,7 +275,7 @@ function renderTasks() {
     if (shared) {
       li.querySelector(".progress").replaceChildren(
         ...membersMeFirst().map((m) => {
-          const ok = task.completedBy.includes(m.email);
+          const ok = task.completedBy.includes(m.username);
           return el("span", { className: ok ? "chip ok" : "chip", textContent: `${ok ? "✓" : "○"} ${m.name}` });
         }),
       );
@@ -256,22 +315,33 @@ function startEdit(span, task) {
   input.addEventListener("blur", () => finish(true));
 }
 
-// ---- 設定（メンバー・タグ） ----
+// ---- 設定（メンバー・タグ・PIN） ----
 
 function renderSettings() {
   $("#member-list").replaceChildren(
     ...state.members.map((m) => {
-      const isMe = m.email === state.me;
+      const isMe = m.username === state.me;
+      const path = `/members/${encodeURIComponent(m.username)}`;
       const name = el("input", { type: "text", value: m.name, maxLength: 50, ariaLabel: "表示名" });
-      name.addEventListener("change", () =>
-        mutate(`/members/${encodeURIComponent(m.email)}`, "PATCH", { name: name.value }));
-      const del = el("button", { type: "button", className: "delete", textContent: "×", disabled: isMe, title: isMe ? "自分は削除できません" : "削除" });
-      del.addEventListener("click", () => {
-        if (confirm(`${m.name} をメンバーから外しますか？\nこの人が担当のタスクは「全員」に変わります。`)) {
-          mutate(`/members/${encodeURIComponent(m.email)}`, "DELETE");
-        }
-      });
-      return el("li", {}, name, el("span", { className: "email", textContent: isMe ? `${m.email}（自分）` : m.email }), del);
+      name.addEventListener("change", () => mutate(path, "PATCH", { name: name.value }));
+
+      const actions = el("span", { className: "actions" });
+      if (!isMe) {
+        const reset = el("button", { type: "button", className: "small", textContent: "PIN 再設定" });
+        reset.addEventListener("click", async () => {
+          const pin = prompt(`${m.name} の新しい PIN（4〜8 桁の数字）`);
+          if (pin && (await mutate(path, "PATCH", { pin }))) alert(`${m.name} の PIN を変更しました`);
+        });
+        const del = el("button", { type: "button", className: "delete", textContent: "×", title: "削除" });
+        del.addEventListener("click", () => {
+          if (confirm(`${m.name} をメンバーから外しますか？\nこの人が担当のタスクは「全員」に変わります。`)) {
+            mutate(path, "DELETE");
+          }
+        });
+        actions.append(reset, del);
+      }
+      const label = el("span", { className: "username", textContent: isMe ? `@${m.username}（自分）` : `@${m.username}` });
+      return el("li", {}, name, label, actions);
     }),
   );
 
@@ -301,7 +371,11 @@ $("#open-settings").addEventListener("click", () => {
 
 $("#new-member").addEventListener("submit", async (e) => {
   e.preventDefault();
-  const ok = await mutate("/members", "POST", { email: $("#member-email").value, name: $("#member-name").value });
+  const ok = await mutate("/members", "POST", {
+    username: $("#member-username").value,
+    name: $("#member-name").value,
+    pin: $("#member-pin").value,
+  });
   if (ok) e.target.reset();
 });
 
@@ -310,6 +384,15 @@ $("#new-tag").addEventListener("submit", async (e) => {
   e.preventDefault();
   const ok = await mutate("/tags", "POST", { name: $("#tag-name").value, color: $("#tag-color").value });
   if (ok) $("#tag-name").value = "";
+});
+
+$("#change-pin").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const ok = await mutate("/me/pin", "POST", { currentPin: $("#current-pin").value, newPin: $("#new-pin").value });
+  if (ok) {
+    e.target.reset();
+    alert("PIN を変更しました");
+  }
 });
 
 // ---- タスク追加・絞り込み ----
@@ -357,4 +440,16 @@ document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible" && state.me) load();
 });
 
-load();
+async function init() {
+  try {
+    const session = await api("/session");
+    if (session.setupRequired) showAuth("setup");
+    else if (!session.me) showAuth("login");
+    else await enterApp();
+  } catch (e) {
+    $("#auth").hidden = false;
+    $("#auth-error").textContent = `エラー: ${e.message}`;
+  }
+}
+
+init();

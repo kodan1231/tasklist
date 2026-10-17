@@ -1,5 +1,0 @@
-# .dev.vars にコピーしてローカル開発（npm run dev）で使う
-# 最初のメンバー（メンバーが 0 人のときだけ使われる。以降は画面の「設定」で管理）
-USERS=you@example.com=あなた,partner@example.com=パートナー
-# localhost でのみ有効。ログイン中とみなすユーザー
-DEV_USER_EMAIL=you@example.com

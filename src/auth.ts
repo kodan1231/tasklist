@@ -1,95 +1,55 @@
-import type { Env } from "./env";
-import { HttpError, type Member } from "./model";
+// PIN のハッシュ化とセッション Cookie の扱い
 
-export function parseUsers(raw: string | undefined): Member[] {
-  if (!raw) return [];
-  return raw
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .map((entry) => {
-      const i = entry.indexOf("=");
-      const email = (i < 0 ? entry : entry.slice(0, i)).trim().toLowerCase();
-      const name = (i < 0 ? "" : entry.slice(i + 1).trim()) || email;
-      return { email, name };
-    });
+export const SESSION_COOKIE = "tasklist_session";
+export const SESSION_TTL_MS = 90 * 24 * 60 * 60 * 1000;
+
+// Workers の PBKDF2 は 100,000 回が上限
+const PBKDF2_ITERATIONS = 100_000;
+
+const encoder = new TextEncoder();
+
+const toHex = (buf: ArrayBuffer | Uint8Array) =>
+  [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
+
+const fromHex = (hex: string) =>
+  Uint8Array.from(hex.match(/../g) ?? [], (h) => parseInt(h, 16));
+
+export function randomHex(bytes: number): string {
+  return toHex(crypto.getRandomValues(new Uint8Array(bytes)));
 }
 
-function normalizeDomain(raw: string): string {
-  const d = raw.trim().replace(/^https?:\/\//, "").replace(/\/+$/, "");
-  return d.includes(".") ? d : `${d}.cloudflareaccess.com`;
-}
-
-type Jwk = JsonWebKey & { kid?: string };
-
-let certCache: { domain: string; keys: Jwk[]; fetchedAt: number } | null = null;
-
-async function getKeys(domain: string, force: boolean): Promise<Jwk[]> {
-  if (!force && certCache?.domain === domain && Date.now() - certCache.fetchedAt < 3600_000) {
-    return certCache.keys;
-  }
-  const res = await fetch(`https://${domain}/cdn-cgi/access/certs`);
-  if (!res.ok) throw new Error(`failed to fetch Access certs: HTTP ${res.status}`);
-  const { keys } = await res.json<{ keys: Jwk[] }>();
-  certCache = { domain, keys, fetchedAt: Date.now() };
-  return keys;
-}
-
-function b64url(s: string): Uint8Array<ArrayBuffer> {
-  const b64 = s.replace(/-/g, "+").replace(/_/g, "/");
-  const bin = atob(b64 + "=".repeat((4 - (b64.length % 4)) % 4));
-  return Uint8Array.from(bin, (c) => c.charCodeAt(0));
-}
-
-const decodeJson = (s: string) => JSON.parse(new TextDecoder().decode(b64url(s)));
-
-// Cloudflare Access が付与する JWT を検証し、メールアドレスを返す
-async function verifyAccessJwt(token: string, domain: string, aud: string): Promise<string | null> {
-  const parts = token.split(".");
-  if (parts.length !== 3) return null;
-  const [h, p, sig] = parts;
-
-  let header: { alg?: string; kid?: string };
-  let payload: { aud?: string | string[]; exp?: number; iss?: string; email?: string };
-  try {
-    header = decodeJson(h);
-    payload = decodeJson(p);
-  } catch {
-    return null;
-  }
-  if (header.alg !== "RS256") return null;
-
-  let jwk = (await getKeys(domain, false)).find((k) => k.kid === header.kid);
-  if (!jwk) jwk = (await getKeys(domain, true)).find((k) => k.kid === header.kid); // 鍵のローテーション対応
-  if (!jwk) return null;
-
-  const key = await crypto.subtle.importKey(
-    "jwk", jwk, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["verify"],
+export async function hashPin(pin: string, saltHex: string): Promise<string> {
+  const key = await crypto.subtle.importKey("raw", encoder.encode(pin), "PBKDF2", false, ["deriveBits"]);
+  const bits = await crypto.subtle.deriveBits(
+    { name: "PBKDF2", hash: "SHA-256", salt: fromHex(saltHex), iterations: PBKDF2_ITERATIONS },
+    key,
+    256,
   );
-  const valid = await crypto.subtle.verify(
-    "RSASSA-PKCS1-v1_5", key, b64url(sig), new TextEncoder().encode(`${h}.${p}`),
-  );
-  if (!valid) return null;
-
-  const auds = Array.isArray(payload.aud) ? payload.aud : [payload.aud];
-  if (!auds.includes(aud)) return null;
-  if (typeof payload.exp !== "number" || payload.exp < Date.now() / 1000) return null;
-  if (payload.iss !== `https://${domain}`) return null;
-  return typeof payload.email === "string" ? payload.email.toLowerCase() : null;
+  return toHex(bits);
 }
 
-// ログイン中のメールアドレスを返す。メンバーかどうかの判定は TaskStore 側で行う
-export async function authenticate(req: Request, env: Env): Promise<string> {
-  const host = new URL(req.url).hostname;
-  if (env.DEV_USER_EMAIL && (host === "localhost" || host === "127.0.0.1")) {
-    return env.DEV_USER_EMAIL.toLowerCase();
+export async function sha256Hex(s: string): Promise<string> {
+  return toHex(await crypto.subtle.digest("SHA-256", encoder.encode(s)));
+}
+
+export function safeEqual(a: string, b: string): boolean {
+  const x = encoder.encode(a);
+  const y = encoder.encode(b);
+  return x.byteLength === y.byteLength && crypto.subtle.timingSafeEqual(x, y);
+}
+
+export function readCookie(req: Request, name: string): string | null {
+  for (const part of (req.headers.get("Cookie") ?? "").split(";")) {
+    const [k, ...v] = part.trim().split("=");
+    if (k === name) return v.join("=");
   }
-  if (!env.ACCESS_TEAM_DOMAIN || !env.ACCESS_AUD) {
-    throw new HttpError(500, "ACCESS_TEAM_DOMAIN / ACCESS_AUD が設定されていません");
-  }
-  const token = req.headers.get("Cf-Access-Jwt-Assertion");
-  if (!token) throw new HttpError(401, "ログインしていません");
-  const email = await verifyAccessJwt(token, normalizeDomain(env.ACCESS_TEAM_DOMAIN), env.ACCESS_AUD);
-  if (!email) throw new HttpError(401, "ログイン情報が無効です");
-  return email;
+  return null;
+}
+
+export function sessionCookie(token: string): string {
+  return `${SESSION_COOKIE}=${token}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${SESSION_TTL_MS / 1000}`;
+}
+
+export function clearSessionCookie(): string {
+  return `${SESSION_COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`;
 }

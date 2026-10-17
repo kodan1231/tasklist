@@ -4,7 +4,7 @@ export const ALL = "*";
 export const TAG_COLORS = ["gray", "red", "orange", "yellow", "green", "teal", "blue", "purple", "pink"];
 
 export interface Member {
-  email: string;
+  username: string;
   name: string;
 }
 
@@ -18,7 +18,7 @@ export interface Task {
   id: string;
   title: string;
   due: string | null; // YYYY-MM-DD
-  assignee: string; // メンバーのメールアドレス、または ALL
+  assignee: string; // メンバーのユーザー名、または ALL
   tags: string[]; // タグ ID
   completedBy: string[]; // 自分の分を完了したメンバー
   done: boolean; // 担当者全員が完了したか
